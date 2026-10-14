@@ -1,0 +1,7 @@
+.godot/
+*.blend1
+*.tmp
+*.log
+builds/
+.env
+.env.*
