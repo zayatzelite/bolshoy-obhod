@@ -7,9 +7,7 @@ func run() -> void:
 	var scene = load("res://scenes/world.tscn").instantiate()
 	root.add_child(scene)
 	await process_frame
-	var previous_xp: int = scene.progression.xp
-	var previous_spent: int = scene.progression.spent
-	var previous_ranks: Dictionary = scene.progression.ranks.duplicate()
+	scene.progression = preload("res://scripts/test_memory_progress.gd").new()
 	scene.progression.xp = 0
 	scene.progression.spent = 0
 	scene.progression.ranks = {"stamina":0,"cart":0,"boots":0}
@@ -39,14 +37,9 @@ func run() -> void:
 	assert(scene.progression.xp==200)
 	assert(scene.progression.upgrade("cart"))
 	assert(scene.progression.capacity()==6)
-	var reloaded = preload("res://scripts/progression.gd").new()
-	reloaded.load_progress()
-	assert(reloaded.capacity()==6 and reloaded.points()==1)
+	assert(scene.progression.points()==1)
 	assert(not scene.progression.upgrade("unknown"))
-	scene.progression.xp = previous_xp
-	scene.progression.spent = previous_spent
-	scene.progression.ranks = previous_ranks
-	scene.progression.save_progress()
+	assert(scene.progression.saves>0) # Test-memory backend only; never writes user://.
 	scene.pause_menu(true)
 	assert(is_instance_valid(scene.overlay))
 	print("SMOKE PASS: settings panel, eight pickups, two deliveries, pause")
