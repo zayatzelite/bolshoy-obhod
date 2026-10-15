@@ -1,4 +1,7 @@
 extends RefCounted
+
+# Shared with the geometry regression test: bounds must use the actual runtime scale.
+const VISUAL_SCALE := 1.8
 var errors: PackedStringArray = []
 
 func validate(data: Variant, catalog: RefCounted) -> Array[Dictionary]:
@@ -29,6 +32,21 @@ func validate(data: Variant, catalog: RefCounted) -> Array[Dictionary]:
 	if not errors.is_empty():result.clear()
 	return result
 
+func visual_bounds(visual:Node3D) -> AABB:
+	var bounds:=AABB()
+	var first:=true
+	for mesh in visual.find_children("*","MeshInstance3D",true,false):
+		var transform_to_root:Transform3D=mesh.transform
+		var ancestor:=mesh.get_parent()
+		while ancestor is Node3D:
+			transform_to_root=ancestor.transform*transform_to_root
+			if ancestor==visual:break
+			ancestor=ancestor.get_parent()
+		var box:AABB=transform_to_root*mesh.get_aabb()
+		bounds=box if first else bounds.merge(box)
+		first=false
+	return AABB(Vector3(-.15,0,-.15),Vector3(.3,.6,.3)) if first else bounds
+
 func spawn(parent: Node3D, catalog: RefCounted, path: String = "res://data/plant_placements.json") -> int:
 	if not FileAccess.file_exists(path):return 0
 	var placements := validate(JSON.parse_string(FileAccess.get_file_as_string(path)),catalog)
@@ -42,19 +60,21 @@ func spawn(parent: Node3D, catalog: RefCounted, path: String = "res://data/plant
 		if not visual is Node3D:
 			visual.free();errors.append("Модель должна иметь 3D-корень.");continue
 		var root := Node3D.new()
-		root.name = "ProtectedPlant"
+		root.name = "ProtectedPlant_"+str(entry.species_id)
 		root.position = entry.position
 		root.add_child(visual)
+		visual.scale=Vector3.ONE*VISUAL_SCALE
 		var body := StaticBody3D.new()
 		body.collision_layer = 2
 		body.collision_mask = 0
 		body.set_meta("species_id",entry.species_id)
 		body.set_meta("plant_visual",visual)
 		var shape := CollisionShape3D.new()
-		var sphere := SphereShape3D.new()
-		sphere.radius = .3
-		shape.shape = sphere
-		shape.position.y = .3
+		var bounds:=visual_bounds(visual)
+		var hitbox:=BoxShape3D.new()
+		hitbox.size=bounds.size+Vector3(.12,.12,.12)
+		shape.shape=hitbox
+		shape.position=bounds.get_center()
 		body.add_child(shape)
 		root.add_child(body)
 		parent.add_child(root)

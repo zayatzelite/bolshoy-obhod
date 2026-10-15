@@ -18,7 +18,7 @@ func _process(_delta: float) -> bool:
 			push_error("Settings outside viewport")
 			quit(1)
 			return true
-		var close: Button = panel.get_child(0).get_child(1)
+		var close: Button = panel.find_child("SettingsReturn",true,false)
 		var close_rect := close.get_global_rect()
 		assert(close_rect.end.y<=rect.end.y and close_rect.position.y>=rect.position.y,"Return button inaccessible")
 		root.get_texture().get_image().save_png("res://../patrol_settings_preview.png")

@@ -12,6 +12,7 @@ var xp_bar: ProgressBar
 var hotbar_slots: Array[Label] = []
 var hotbar_icons: Array[Control] = []
 var compass: Control
+var level_ring: Control
 
 func update_inventory(held: Node3D, items: Array) -> void:
 	for index in range(4):
@@ -54,17 +55,19 @@ func card(at: Vector2, dimensions: Vector2) -> VBoxContainer:
 	p.add_child(backing_layer)
 	backing_layer.add_child(backdrop)
 	backdrop.size = p.size
+	material.set_shader_parameter("panel_size",p.size)
 	p.set_meta("stone_backdrop",backdrop)
 	p.resized.connect(func():
 		backdrop.position = Vector2.ZERO
-		backdrop.size = p.size)
+		backdrop.size = p.size
+		material.set_shader_parameter("panel_size",p.size))
 	return col
 
 func caption(parent: Node, text: String, font_size: int = 17) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_size_override("font_size",font_size)
-	l.add_theme_color_override("font_color",Color("f3e8cb"))
+	l.add_theme_color_override("font_color",Color("30271c"))
 	parent.add_child(l)
 	return l
 
@@ -105,10 +108,10 @@ func meter(parent: Node, icon: String, color: Color) -> ProgressBar:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var vitals := card(Vector2(24,540),Vector2(290,145))
-	caption(vitals,"СОСТОЯНИЕ СМОТРИТЕЛЯ",13)
-	health_bar = meter(vitals,"♥",Color("de826b"))
-	stamina_bar = meter(vitals,"⚡",Color("e8c875"))
+	var vitals := card(Vector2(12,566),Vector2(290,145))
+	caption(vitals,"СМОТРИТЕЛЬ",11)
+	health_bar = meter(vitals,"♥",Color("a46151"))
+	stamina_bar = meter(vitals,"⚡",Color("ad975a"))
 	var task := card(Vector2(24,24),Vector2(285,78))
 	quest_label = caption(task,"ОБХОД · 0 / 8",16)
 	var experience := card(Vector2(430,18),Vector2(420,76))
@@ -123,21 +126,27 @@ func _ready() -> void:
 	xp_bar.add_theme_stylebox_override("background",xp_track)
 	xp_bar.add_theme_stylebox_override("fill",xp_fill)
 	experience.add_child(xp_bar)
-	var cargo := card(Vector2(1070,620),Vector2(185,65))
+	# Keep legacy values for UI consumers, but replace the central strip visually.
+	experience.get_parent().hide()
+	level_ring=preload("res://scripts/hud_level_ring.gd").new()
+	level_ring.position=Vector2(1150,16)
+	level_ring.size=Vector2(112,112)
+	add_child(level_ring)
+	var cargo := card(Vector2(1065,643),Vector2(203,67))
 	cargo_label = caption(cargo,"▣ 0 / 4",18)
 	var hint := card(Vector2(24,355),Vector2(250,70))
 	prompt_label = caption(hint,"",15)
 	prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	prompt_label.custom_minimum_size.x = 218
 	for index in range(4):
-		var slot := card(Vector2(400+index*120,590),Vector2(110,95))
+		var slot := card(Vector2(462+index*88,618),Vector2(86,92))
 		var label := caption(slot,"—",13)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		label.custom_minimum_size.x = 78
+		label.custom_minimum_size.x = 54
 		hotbar_slots.append(label)
-		var icon := preload("res://scripts/item_icon.gd").new()
-		icon.custom_minimum_size = Vector2(60,48)
+		var icon := preload("res://scripts/item_preview.gd").new()
+		icon.custom_minimum_size = Vector2(54,44)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
 		hotbar_icons.append(icon)
@@ -153,7 +162,7 @@ func _ready() -> void:
 	cross.position = Vector2(635,340)
 	add_child(cross)
 	compass = preload("res://scripts/patrol_compass.gd").new()
-	compass.position = Vector2(430,100)
+	compass.position = Vector2(430,5)
 	compass.size = Vector2(420,60)
 	add_child(compass)
 	navigation_label = Label.new()
@@ -162,7 +171,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(prompt_label):
-		prompt_label.get_parent().get_parent().visible = not prompt_label.text.is_empty()
+		prompt_label.get_parent().get_parent().visible = false
 		notice_label.get_parent().get_parent().visible = not notice_label.text.is_empty()
 
 func update_values(health: float, stamina: float, cargo: int, capacity: int, delivered: int, xp: int) -> void:
@@ -170,8 +179,9 @@ func update_values(health: float, stamina: float, cargo: int, capacity: int, del
 	stamina_bar.value = stamina
 	health_bar.get_node("Amount").text = "%d / 100" % clampi(roundi(health),0,100)
 	stamina_bar.get_node("Amount").text = "%d / 100" % clampi(roundi(stamina),0,100)
-	cargo_label.text = "▣ %d / %d" % [cargo,capacity]
+	cargo_label.text = "ТЕЛЕЖКА · %d / %d" % [cargo,capacity]
 	quest_label.text = "ОБХОД · %d / 8" % delivered
 	var current := xp%100
 	xp_label.text = "УРОВЕНЬ %d · %d / 100 XP · ещё %d" % [1+xp/100,current,100-current]
 	xp_bar.value = current
+	level_ring.set_xp(xp)

@@ -43,7 +43,7 @@ static func make_panel(parent: Node, on_close: Callable) -> PanelContainer:
 	panel.custom_minimum_size = Vector2(1280,720)
 	panel.theme = preload("res://scripts/ui_theme.gd").make_theme()
 	var style := preload("res://scripts/ui_theme.gd").panel_style()
-	style.bg_color = Color("302c23")
+	style.bg_color = Color("d7bf91")
 	style.set_content_margin_all(48)
 	panel.add_theme_stylebox_override("panel", style)
 	parent.add_child(panel)
@@ -72,7 +72,7 @@ static func make_panel(parent: Node, on_close: Callable) -> PanelContainer:
 		var column: VBoxContainer = groups["Звук" if key=="volume" else "Управление"]
 		var caption := Label.new()
 		caption.text = "%s · %.4f" % [entry[1],float(values[key])] if key=="sensitivity" else "%s · %d" % [entry[1],int(values[key])]
-		caption.add_theme_color_override("font_color", Color("f3e8cb"))
+		caption.add_theme_color_override("font_color", Color("30271c"))
 		column.add_child(caption)
 		var slider := HSlider.new()
 		slider.min_value = entry[2]
@@ -92,7 +92,7 @@ static func make_panel(parent: Node, on_close: Callable) -> PanelContainer:
 		toggle.text = entry[1]
 		toggle.button_pressed = values[key]
 		for color_name in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
-			toggle.add_theme_color_override(color_name, Color("f3e8cb"))
+			toggle.add_theme_color_override(color_name, Color("30271c"))
 		column.add_child(toggle)
 		toggle.toggled.connect(func(value: bool) -> void:
 			values[key] = value
@@ -101,12 +101,13 @@ static func make_panel(parent: Node, on_close: Callable) -> PanelContainer:
 	var help := Label.new()
 	help.text = "WASD — ходьба · Shift — бег · Пробел — прыжок\nE — действие · I — рюкзак · R — убрать / достать\n1–3 — выбрать предмет из рюкзака · G — положить\nM — схема маршрута · Tab — навыки и журнал · Esc — пауза"
 	help.add_theme_font_size_override("font_size", 14)
-	help.add_theme_color_override("font_color", Color("c3c4a8"))
+	help.add_theme_color_override("font_color", Color("59432b"))
 	groups["Управление"].add_child(help)
 	var audio_note := Label.new()
-	audio_note.text = "Аудиоматериалы ещё не подключены."
+	audio_note.text = "Громкость игровых эффектов · звук затвора подключён."
 	groups["Звук"].add_child(audio_note)
 	var close := Button.new()
+	close.name="SettingsReturn"
 	close.text = "Сохранено · Вернуться"
 	close.custom_minimum_size.y = 42
 	layout.add_child(close)

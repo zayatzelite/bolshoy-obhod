@@ -9,6 +9,129 @@ var delivered := 0
 var collected := 0
 var rubbish: Array[Node3D] = []
 var hud: Control
+var viewfinder: Control
+var build_complete := false
+var staged_build := false
+var build_cover: CanvasLayer
+var build_badge:Control
+var build_stage:=0
+var build_status:Label
+func build_checkpoint() -> void:
+	if staged_build:
+		build_stage+=1
+		if is_instance_valid(build_badge):build_badge.progress=minf(99,90+build_stage*.9)
+		if is_instance_valid(build_status):
+			var stages:PackedStringArray=["Подготовка маршрута…","Ландшафт…","Материалы…","Тропы и деревья…","Каменные галереи…","Цветочные поляны…","Лес и настилы…","Пункты сдачи…","Базы смотрителя…","Последняя проверка…"]
+			build_status.text=stages[mini(build_stage-1,stages.size()-1)]
+		await get_tree().process_frame
+		await get_tree().process_frame
+var map_waypoints: Array[Vector2] = []
+var waypoint_manifest:="user://route_markers.json"
+func load_route_markers() -> void:
+	map_waypoints.clear()
+	if not FileAccess.file_exists(waypoint_manifest):return
+	var data:Variant=JSON.parse_string(FileAccess.get_file_as_string(waypoint_manifest))
+	if not data is Array:return
+	for pair in data:
+		if pair is Array and pair.size()==2 and (pair[0] is float or pair[0] is int) and (pair[1] is float or pair[1] is int):
+			var point:=Vector2(float(pair[0]),float(pair[1]))
+			if point.is_finite() and point.x>=0 and point.x<=1 and point.y>=0 and point.y<=1:map_waypoints.append(point)
+		if map_waypoints.size()==8:break
+	waypoint_active=not map_waypoints.is_empty()
+	if waypoint_active:
+		var last:Vector2=map_waypoints.back()
+		waypoint_destination=Vector3((last.x*1100-330)/4.3,0,12-(last.y*480-25)/2)
+func save_route_markers() -> void:
+	var data:Array=[]
+	for point in map_waypoints:data.append([point.x,point.y])
+	var file:=FileAccess.open(waypoint_manifest,FileAccess.WRITE)
+	if file:file.store_string(JSON.stringify(data))
+	else:notify("Не удалось сохранить метки маршрута.")
+var waypoint_active := false
+var waypoint_destination := Vector3.ZERO
+var photo_records: Array[Dictionary] = []
+var photo_busy := false
+var session_photos := 0
+var photo_manifest := "user://photo_journal.json"
+func load_photo_records() -> void:
+	photo_records.clear()
+	if not FileAccess.file_exists(photo_manifest):return
+	var data: Variant=JSON.parse_string(FileAccess.get_file_as_string(photo_manifest))
+	if not data is Array:return
+	for record in data:
+		if not record is Dictionary:continue
+		var path:=str(record.get("path",""))
+		if not path.begins_with("user://photos/") or not FileAccess.file_exists(path):continue
+		var species:=str(record.get("species",""))
+		photo_records.append({"path":path,"species":species,"taken":str(record.get("taken",""))})
+		if not plant_catalog.find_species(species).is_empty():observed_species[species]=true
+		if photo_records.size()>=24:break
+func save_photo_records() -> Error:
+	var file:=FileAccess.open(photo_manifest,FileAccess.WRITE)
+	if file==null:return FileAccess.get_open_error()
+	var records: Array=[]
+	for record in photo_records:records.append({"path":record.path,"species":record.species,"taken":str(record.get("taken",""))})
+	file.store_string(JSON.stringify(records))
+	return OK
+func photo_count_text(count:int) -> String:
+	var ending:="снимков"
+	if count%100<11 or count%100>14:
+		if count%10==1:ending="снимок"
+		elif count%10>=2 and count%10<=4:ending="снимка"
+	return "%d %s" % [count,ending]
+
+func take_photo() -> void:
+	if photo_busy or not player.camera_equipped or Input.mouse_mode!=Input.MOUSE_MODE_CAPTURED:return
+	photo_busy=true
+	preload("res://scripts/patrol_audio.gd").play_shutter(self)
+	update_focus()
+	var species:=focused_species
+	var restore_outline:Node3D=focused_plant if is_instance_valid(focused_plant) else focused_item
+	if is_instance_valid(restore_outline):set_outline(restore_outline,false)
+	var restore_ui: bool=ui.visible
+	var restore_process:bool=player.is_processing()
+	var restore_physics:bool=player.is_physics_processing()
+	var restore_input:bool=player.is_processing_unhandled_input()
+	ui.hide()
+	player.photo_camera.hide()
+	player.carrying_hand.hide()
+	player.camera_support_hand.hide()
+	var flash := ColorRect.new()
+	flash.name = "ShutterFlash"
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.color = Color(1,1,1,0)
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(flash)
+	player.set_process(false)
+	player.set_physics_process(false)
+	player.set_process_unhandled_input(false)
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	var image:=get_viewport().get_texture().get_image()
+	if is_instance_valid(restore_outline):set_outline(restore_outline,true)
+	var directory:="user://photos"
+	DirAccess.make_dir_recursive_absolute(directory)
+	var path:=directory+"/patrol_%d_%d.png" % [int(Time.get_unix_time_from_system()*1000000),Time.get_ticks_usec()]
+	var error:=image.save_png(path)
+	ui.visible=restore_ui
+	player.set_process(restore_process)
+	player.set_physics_process(restore_physics)
+	player.set_process_unhandled_input(restore_input)
+	player.shutter_recoil=1.0
+	flash.color.a=.22
+	var shutter := flash.create_tween()
+	shutter.tween_property(flash,"color:a",0.0,.18)
+	shutter.tween_callback(flash.queue_free)
+	if error==OK:
+		session_photos+=1
+		photo_records.append({"path":path,"species":species,"position":player.position,"taken":Time.get_datetime_string_from_system(false,true)})
+		if photo_records.size()>24:photo_records.pop_front()
+		if not plant_catalog.find_species(species).is_empty():observed_species[species]=true
+		var journal_error:=save_photo_records()
+		if journal_error!=OK:notify("Снимок сохранён, но запись журнала не сохранена: %d" % journal_error)
+		else:notify("Фото сохранено · %s в дневнике" % photo_count_text(photo_records.size()))
+	else:notify("Не удалось сохранить фото: %d" % error)
+	photo_busy=false
 var experience := 0
 var progression := preload("res://scripts/progression.gd").new()
 var prompt: Label
@@ -329,10 +452,16 @@ func add_end_landscape() -> void:
 		part(self,surface.commit(),Vector3.ZERO,material)
 
 func clear_route_tree_groups(landscape: Node3D) -> void:
+	var crowns:Array[MeshInstance3D]=[]
+	for child in landscape.get_children():
+		if child is MeshInstance3D and str(child.name).begins_with("Pine layered crown"):crowns.append(child)
+	var handled:=0
 	for trunk in landscape.get_children():
 		if not trunk is MeshInstance3D or not str(trunk.name).begins_with("Tree trunk"):continue
+		handled+=1
+		if staged_build and handled%24==0:await get_tree().process_frame
 		var pieces: Array[MeshInstance3D] = [trunk]
-		for crown in landscape.get_children():
+		for crown in crowns:
 			if crown is MeshInstance3D and str(crown.name).begins_with("Pine layered crown") and Vector2(crown.position.x-trunk.position.x,crown.position.z-trunk.position.z).length()<.8:
 				pieces.append(crown)
 		var removed := false
@@ -348,20 +477,24 @@ func clear_route_tree_groups(landscape: Node3D) -> void:
 func remove_rock_tree_overlaps(landscape: Node3D) -> void:
 	var rocks: Array[AABB] = []
 	var trees: Array[MeshInstance3D] = []
+	var crowns:Array[MeshInstance3D]=[]
 	for node in landscape.get_children():
 		if not node is MeshInstance3D:continue
 		if node.name.begins_with("Cliff fin") or node.name.begins_with("Trail limestone gallery"):
 			rocks.append(node.transform*node.mesh.get_aabb())
 		elif node.name.begins_with("Tree trunk"):trees.append(node)
+		elif node.name.begins_with("Pine layered crown"):crowns.append(node)
 	var removed := 0
+	var handled:=0
 	for trunk in trees:
+		handled+=1
+		if staged_build and handled%24==0:await get_tree().process_frame
 		var pieces: Array[MeshInstance3D] = [trunk]
 		var footprint: AABB = trunk.transform*trunk.mesh.get_aabb()
-		for node in landscape.get_children():
-			if node is MeshInstance3D and node.name.begins_with("Pine layered crown"):
-				if Vector2(node.position.x-trunk.position.x,node.position.z-trunk.position.z).length()<.8:
-					pieces.append(node)
-					footprint = footprint.merge(node.transform*node.mesh.get_aabb())
+		for node in crowns:
+			if Vector2(node.position.x-trunk.position.x,node.position.z-trunk.position.z).length()<.8:
+				pieces.append(node)
+				footprint = footprint.merge(node.transform*node.mesh.get_aabb())
 		var overlaps := false
 		for rock in rocks:
 			if footprint.grow(.25).intersects(rock):overlaps = true
@@ -402,7 +535,48 @@ func add_end_forest(landscape: Node3D) -> void:
 				tree.add_child(copy)
 
 func _ready() -> void:
+	staged_build=get_tree().root.has_meta("patrol_warmed_assets")
+	if staged_build:
+		set_process(false)
+		set_physics_process(false)
+		set_process_unhandled_input(false)
+		build_cover=CanvasLayer.new()
+		build_cover.layer=100
+		add_child(build_cover)
+		var screen:=preload("res://scripts/loading_art.gd").new()
+		build_cover.add_child(screen)
+		var badge:=preload("res://scripts/loading_badge.gd").new()
+		badge.position=Vector2(430,555)
+		badge.size=Vector2(420,74)
+		badge.progress=90
+		build_badge=badge
+		screen.add_child(badge)
+		var title:=Label.new()
+		title.text="Размещаем объекты маршрута…"
+		title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		var status_panel:=PanelContainer.new()
+		status_panel.position=Vector2(430,639)
+		status_panel.size=Vector2(420,34)
+		var status_style:=StyleBoxFlat.new()
+		status_style.bg_color=Color("e6d3a6")
+		status_style.border_color=Color("a98a54")
+		status_style.set_border_width_all(1)
+		status_style.set_corner_radius_all(6)
+		status_style.content_margin_left=12
+		status_style.content_margin_right=12
+		status_style.content_margin_top=6
+		status_style.content_margin_bottom=6
+		status_panel.add_theme_stylebox_override("panel",status_style)
+		screen.add_child(status_panel)
+		title.add_theme_font_size_override("font_size",14)
+		title.add_theme_color_override("font_color",Color("352f25"))
+		title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		status_panel.add_child(title)
+		build_status=title
+		await build_checkpoint()
 	plant_catalog.load_catalog()
+	load_photo_records()
+	load_route_markers()
 	progression.load_progress()
 	experience = progression.xp
 	var sky := ProceduralSkyMaterial.new()
@@ -428,6 +602,7 @@ func _ready() -> void:
 	var location := load("res://assets/patrol_location.glb") as PackedScene
 	var landscape := location.instantiate()
 	add_child(landscape)
+	if staged_build:await build_checkpoint()
 	for rock in landscape.get_children():
 		if rock is MeshInstance3D and str(rock.name).begins_with("Cliff fin"):
 			rock.transform = Transform3D(Basis(Vector3.UP,PI/2),Vector3(330,1,-95))*rock.transform
@@ -439,11 +614,15 @@ func _ready() -> void:
 			variation.origin = Vector3(center.x+2.2*sin(center.z*.085),bounds.position.y,center.z+1.8*sin(center.z*.09))-variation.basis*Vector3(center.x,bounds.position.y,center.z)
 			rock.transform = variation*rock.transform
 	grade_landscape(landscape)
-	clear_route_tree_groups(landscape)
-	remove_rock_tree_overlaps(landscape)
+	if staged_build:await build_checkpoint()
+	await clear_route_tree_groups(landscape)
+	if staged_build:await build_checkpoint()
+	await remove_rock_tree_overlaps(landscape)
+	if staged_build:await build_checkpoint()
 	var flowers := preload("res://scripts/meadow_flowers.gd").new()
 	add_child(flowers)
 	flowers.build(self,landscape)
+	if staged_build:await build_checkpoint()
 	var approach := preload("res://scripts/base_approach.gd").build()
 	add_child(approach)
 	approach.create_trimesh_collision()
@@ -458,6 +637,7 @@ func _ready() -> void:
 		# Recessed footing closes the gap under the imported plank platform.
 		box(self,Vector3(-6,-.08,rest_z-.8),Vector3(3.92,.55,1.93),"786c50",true)
 	add_end_forest(landscape)
+	if staged_build:await build_checkpoint()
 	var sky_birds := preload("res://scripts/sky_birds.gd").new()
 	add_child(sky_birds)
 	add_child(preload("res://scripts/soft_clouds.gd").new())
@@ -512,7 +692,17 @@ func _ready() -> void:
 			memo.outline_size = 0
 			memo.modulate = Color("354c3e")
 			add_child(memo)
-		box(self,at+Vector3(2.8,.72,6.2),Vector3(.10,1.44,.10),"624b30")
+		# Close the 0.39m uncovered strip between cabin floor and first deck plank.
+		var threshold := box(self,at+Vector3(0,.09,3.70),Vector3(8,.16,.42),"94754c")
+		threshold.name = "Cabin deck threshold"
+		var threshold_wood := ShaderMaterial.new()
+		threshold_wood.shader = preload("res://shaders/cabin_wood.gdshader")
+		threshold_wood.set_shader_parameter("wood_color",Color("55422d"))
+		threshold.material_override = threshold_wood
+		threshold.set_meta("deck_threshold",true)
+		threshold.create_trimesh_collision()
+		# Post ends below the board face; text is separated from the backing.
+		box(self,at+Vector3(2.8,.62,6.14),Vector3(.10,1.24,.10),"624b30")
 		box(self,at+Vector3(2.8,1.48,6.2),Vector3(1.45,.40,.10),"bd9b65")
 		var ramp := box(self,at+Vector3(0,.08,8.04),Vector3(4.0,.08,1.35),"94754c")
 		ramp.rotation.x = atan(.17/1.35)
@@ -520,12 +710,15 @@ func _ready() -> void:
 		ramp.set_meta("delivery_ramp",true)
 		var base_sign := Label3D.new()
 		base_sign.text = "СДАЧА"
-		base_sign.position = at+Vector3(2.8,1.48,6.26)
+		base_sign.position = at+Vector3(2.8,1.48,6.28)
+		base_sign.set_meta("delivery_sign",true)
+		base_sign.no_depth_test = false
 		base_sign.font_size = 48
 		base_sign.pixel_size = .003
 		base_sign.outline_size = 0
 		base_sign.modulate = Color("30271c")
 		add_child(base_sign)
+		if staged_build:await build_checkpoint()
 	add_route_sign(Vector3(3.8,0,-60))
 	add_route_sign(Vector3(24,.02,-138),true)
 	# Collision-only safety perimeter stays behind landscape and riverbank.
@@ -623,11 +816,22 @@ func _ready() -> void:
 	hud = Control.new()
 	hud.set_script(preload("res://scripts/patrol_hud.gd"))
 	ui.add_child(hud)
+	viewfinder=preload("res://scripts/camera_viewfinder.gd").new()
+	ui.add_child(viewfinder)
 	prompt = hud.prompt_label
 	message = hud.notice_label
-	notify("Первый обход: соберите 8 предметов и доставьте их на базу.")
+	notify("Мусор → база · 8 предметов")
 	preload("res://scripts/plant_placements.gd").new().spawn(self,plant_catalog)
 	call_deferred("ground_spawned_items")
+	if staged_build:
+		build_badge.progress=100
+		await get_tree().process_frame
+		build_cover.queue_free()
+		get_tree().root.remove_meta("patrol_warmed_assets")
+	set_process(true)
+	set_physics_process(true)
+	set_process_unhandled_input(true)
+	build_complete=true
 
 func ground_spawned_items() -> void:
 	for item in rubbish:
@@ -669,6 +873,7 @@ func add_route_sign(at: Vector3, riverside: bool = false) -> void:
 	root.add_child(caution)
 
 func navigation_destination() -> Vector3:
+	if waypoint_active:return waypoint_destination
 	if cargo<=0:return delivery_points[1]
 	var nearest: Vector3 = delivery_points[0]
 	for point in delivery_points:
@@ -691,8 +896,17 @@ func update_effect_time(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	update_effect_time(delta)
-	hud.visible = not is_instance_valid(overlay) or overlay.is_queued_for_deletion()
-	if is_instance_valid(overlay):preload("res://scripts/ui_theme.gd").skin_buttons(overlay)
+	var camera_view:bool=player.camera_aim>.65 and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED
+	hud.visible = (not is_instance_valid(overlay) or overlay.is_queued_for_deletion()) and not camera_view
+	viewfinder.blend=clampf((player.camera_aim-.45)/.55,0,1) if Input.mouse_mode==Input.MOUSE_MODE_CAPTURED else 0.0
+	viewfinder.shots=session_photos
+	viewfinder.zoom=float(player.settings.fov)/player.camera.fov
+	var photo_subject: Dictionary=plant_catalog.find_species(focused_species)
+	viewfinder.subject=str(photo_subject.get("name_ru",""))
+	viewfinder.queue_redraw()
+	if is_instance_valid(overlay):
+		preload("res://scripts/ui_theme.gd").skin_buttons(overlay)
+		preload("res://scripts/ui_motion.gd").reveal(overlay)
 	cloud_time += delta
 	for index in range(moving_clouds.size()):
 		moving_clouds[index].position = cloud_origins[index]+Vector3(12*sin(cloud_time*.01),0,0)
@@ -709,6 +923,7 @@ func _process(delta: float) -> void:
 	hud.compass.heading = -player.rotation.y
 	hud.compass.target_angle = -angle
 	hud.compass.distance = int(to_base.length())
+	hud.compass.target_label = "МЕТКА" if waypoint_active else ("СДАЧА" if cargo>0 else "БАЗА")
 	hud.compass.queue_redraw()
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		settings_refresh_timer -= delta
@@ -764,14 +979,35 @@ func update_focus() -> void:
 		if is_instance_valid(focused_item):set_outline(focused_item,true)
 
 func place_in_hand(item: Node3D) -> void:
-	item.reparent(player.camera)
-	item.position = Vector3(.22,-.25,-.82)
-	item.rotation = Vector3(0,0,.35)
-	if str(item.get_meta("title","")).contains("банка"):
-		item.position += Vector3(-.015,.035,-.025)
+	item.reparent(player.carry_rig)
+	item.position = Vector3(.28,-.56,-.78747)
+	item.rotation = Vector3(0,0,.12)
+	var title:=str(item.get_meta("title",""))
+	if title.contains("банка"):
+		item.position = Vector3(.278,-.488,-.78591)
+	elif title.contains("стакан"):
+		item.position=Vector3(.278,-.47,-.76217)
+		item.rotation.x=-.10
 	item.show()
 
+var conservation_warnings:=0
+var conservation_violations:=0
+var conservation_penalty:=0
+var warned_plants:Dictionary={}
+func protect_plant(item:Node3D) -> bool:
+	var species:=str(item.get_meta("species_id",""))
+	if species.is_empty() or plant_catalog.find_species(species).is_empty():return false
+	if not warned_plants.has(species):
+		warned_plants[species]=true
+		conservation_warnings+=1
+		notify("Охраняемое растение: не срывайте его. Используйте фотоаппарат или изучите карточку.")
+	else:
+		conservation_violations+=1
+		conservation_penalty+=25
+		notify("Повторная попытка сбора: штраф 25 баллов оценки обхода. Растение сохранено.")
+	return true
 func pickup(item: Node3D) -> void:
+	if protect_plant(item):return
 	if held_item or player.dragging:
 		notify("Освободите руки перед подбором предмета.")
 		return
@@ -911,26 +1147,38 @@ func _notification(what: int) -> void:
 	if what==NOTIFICATION_APPLICATION_FOCUS_OUT:pause_on_focus_loss()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		take_photo()
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode==KEY_ESCAPE:
+		var key:int=event.physical_keycode if event.physical_keycode!=0 else event.keycode
+		if key==KEY_C and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+			player.toggle_camera()
+		elif key==KEY_ESCAPE:
 			if is_instance_valid(overlay):
 				overlay.queue_free()
 				resume()
 				return
 			pause_menu(false)
-		elif event.keycode==KEY_TAB and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key==KEY_TAB and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			pause_menu(true)
-		elif event.keycode==KEY_M and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key==KEY_M and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			map_menu()
-		elif event.keycode==KEY_I and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key==KEY_J and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+			journal_menu()
+		elif key==KEY_I and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			inventory_menu()
-		elif event.keycode in [KEY_1,KEY_2,KEY_3] and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
-			select_hotbar(int(event.keycode)-int(KEY_1))
-		elif event.keycode==KEY_R and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key in [KEY_1,KEY_2,KEY_3] and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+			select_hotbar(int(key)-int(KEY_1))
+		elif key==KEY_R and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			stow_or_retrieve()
-		elif event.keycode==KEY_G and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key==KEY_G and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			drop_held()
-		elif event.keycode==KEY_E and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+		elif key==KEY_F and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED and not focused_species.is_empty():
+			var protected:=Node3D.new()
+			protected.set_meta("species_id",focused_species)
+			protect_plant(protected)
+			protected.free()
+		elif key==KEY_E and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
 			interact()
 
 func cargo_pose(slot: int) -> Transform3D:
@@ -1013,6 +1261,11 @@ func show_results() -> void:
 	overlay.add_theme_stylebox_override("panel",preload("res://scripts/ui_theme.gd").panel_style())
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var results_backing:=Node2D.new()
+	overlay.add_child(results_backing)
+	var results_background:=preload("res://scripts/journal_backdrop.gd").new()
+	results_background.size=Vector2(1280,720)
+	results_backing.add_child(results_background)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation",28)
 	overlay.add_child(column)
@@ -1020,11 +1273,49 @@ func show_results() -> void:
 	title.text = "ПЕРВЫЙ ОБХОД ЗАВЕРШЁН"
 	title.add_theme_font_size_override("font_size",32)
 	column.add_child(title)
+	var achievements := HBoxContainer.new()
+	achievements.add_theme_constant_override("separation",28)
+	column.add_child(achievements)
+	var ring := preload("res://scripts/results_xp_ring.gd").new()
+	ring.name = "ResultsXPRing"
+	ring.xp = progression.xp
+	ring.earned = session_xp
+	ring.level = 1+int(progression.xp/100)
+	achievements.add_child(ring)
+	for data in [["МУСОР СДАН", "%d / 8" % delivered],["ОПЫТ ЗА ОБХОД", "+%d XP" % session_xp],["ФОТО ЗА ОБХОД", photo_count_text(session_photos)]]:
+		var card := PanelContainer.new()
+		var results_card_style:=preload("res://scripts/ui_theme.gd").panel_style()
+		results_card_style.set_content_margin_all(36)
+		results_card_style.bg_color=Color("e5cca0")
+		results_card_style.shadow_size=5
+		results_card_style.shadow_color=Color(0,0,0,.3)
+		card.add_theme_stylebox_override("panel",results_card_style)
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		achievements.add_child(card)
+		var content := VBoxContainer.new()
+		card.add_child(content)
+		card.add_child(preload("res://scripts/ornamental_frame.gd").new())
+		var top_spacer:=Control.new()
+		top_spacer.custom_minimum_size.y=24
+		content.add_child(top_spacer)
+		var heading := Label.new()
+		heading.text = data[0]
+		heading.add_theme_font_size_override("font_size",15)
+		content.add_child(heading)
+		var value := Label.new()
+		value.text = data[1]
+		value.add_theme_font_size_override("font_size",30)
+		content.add_child(value)
+	var reveal := overlay.create_tween()
+	overlay.set_meta("motion_revealed",true)
+	overlay.modulate.a = 0.0
+	reveal.tween_property(overlay,"modulate:a",1.0,.35)
 	var summary := Label.new()
-	summary.add_theme_font_size_override("font_size",24)
+	summary.add_theme_font_size_override("font_size",20)
 	summary.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	summary.text = "Доставлено мусора: %d / 8\nОпыт за обход: %d\nВремя на тропе: %d мин %02d с\nПройдено: %d м" % [delivered,session_xp,int(session_seconds)/60,int(session_seconds)%60,walked_distance]
+	summary.text = "Время на тропе: %d мин %02d с · %d м" % [int(session_seconds)/60,int(session_seconds)%60,walked_distance]
+	summary.text += "\nОхрана растений: %d предупреждений · %d нарушений\nОценка обхода: %d (штрафы: −%d)" % [conservation_warnings,conservation_violations,maxi(0,session_xp-conservation_penalty),conservation_penalty]
 	summary.text += "\nИзучено видов: %d / %d" % [observed_species.size(),plant_catalog.entries.size()] if not plant_catalog.entries.is_empty() else "\nГербарий: подтверждённые материалы ещё не подключены."
 	column.add_child(summary)
 	var fact := Label.new()
@@ -1045,7 +1336,7 @@ func map_menu() -> void:
 	overlay = PanelContainer.new()
 	overlay.theme = preload("res://scripts/ui_theme.gd").make_theme()
 	var map_style := preload("res://scripts/ui_theme.gd").panel_style()
-	map_style.bg_color = Color("302c23")
+	map_style.bg_color = Color("d7bf91")
 	overlay.add_theme_stylebox_override("panel",map_style)
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1058,12 +1349,24 @@ func map_menu() -> void:
 	title.add_theme_font_size_override("font_size",24)
 	column.add_child(title)
 	var disclaimer := Label.new()
-	disclaimer.text = "Игровая схема · Домик — база · Круг — вы · Тележка — груз\nНе является реальной туристической картой парка"
+	disclaimer.text = "СХЕМА ИГРОВОГО МАРШРУТА"
+	disclaimer.add_theme_font_size_override("font_size",11)
+	disclaimer.tooltip_text="Условная игровая схема, не туристическая карта национального парка."
 	column.add_child(disclaimer)
 	var map := preload("res://scripts/route_map.gd").new()
 	map.player_position = player.position
+	map.player_heading=player.rotation.y
 	map.cart_position = cart.position
 	map.bases = bases
+	for plant in find_children("ProtectedPlant_*","Node3D",true,false):
+		map.plant_points.append(plant.position)
+		var species_id:=str(plant.name).trim_prefix("ProtectedPlant_")
+		map.plant_names.append(str(plant_catalog.find_species(species_id).get("name_ru","Растение")))
+	map.waypoints = map_waypoints
+	map.waypoint_changed.connect(func(destination: Vector3, active: bool):
+		waypoint_destination=destination
+		waypoint_active=active
+		save_route_markers())
 	map.custom_minimum_size = Vector2(1100,480)
 	map.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(map)
@@ -1083,7 +1386,7 @@ func inventory_menu() -> void:
 	overlay.position = Vector2.ZERO
 	overlay.custom_minimum_size = Vector2(1280,720)
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color("302c23")
+	panel_style.bg_color = Color("d7bf91")
 	panel_style.set_corner_radius_all(16)
 	panel_style.set_content_margin_all(24)
 	panel_style.set_border_width_all(1)
@@ -1159,7 +1462,7 @@ func skill_menu() -> void:
 	overlay = PanelContainer.new()
 	overlay.theme = preload("res://scripts/ui_theme.gd").make_theme()
 	var style := preload("res://scripts/ui_theme.gd").panel_style()
-	style.bg_color = Color("302c23")
+	style.bg_color = Color("d7bf91")
 	overlay.add_theme_stylebox_override("panel",style)
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1202,37 +1505,254 @@ func journal_menu() -> void:
 	overlay = PanelContainer.new()
 	overlay.theme = preload("res://scripts/ui_theme.gd").make_theme()
 	var style := preload("res://scripts/ui_theme.gd").panel_style()
-	style.bg_color = Color("302c23")
+	style.bg_color = Color("d7bf91")
 	overlay.add_theme_stylebox_override("panel",style)
 	ui.add_child(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var journal_backdrop:=preload("res://scripts/journal_backdrop.gd").new()
+	journal_backdrop.size=Vector2(1280,720)
+	journal_backdrop.book_spread=true
+	var backing_layer:=Node2D.new()
+	overlay.add_child(backing_layer)
+	backing_layer.add_child(journal_backdrop)
 	var column := VBoxContainer.new()
 	overlay.add_child(column)
 	var title := Label.new()
 	title.text = "ЖУРНАЛ ОБХОДА"
 	title.add_theme_font_size_override("font_size",28)
 	column.add_child(title)
+	var tabs := HBoxContainer.new()
+	tabs.name="JournalTabs"
+	tabs.add_theme_constant_override("separation",12)
+	column.add_child(tabs)
+	var tab_group:=ButtonGroup.new()
+	for caption in ["Задания", "Фотодневник", "Виды", "На тропу"]:
+		var tab := Button.new()
+		tab.text = caption
+		if caption!="На тропу":
+			tab.toggle_mode=true
+			tab.button_group=tab_group
+			tab.button_pressed=caption=="Задания"
+			tab.toggled.connect(func(active:bool):
+				if tab.has_meta("button_material"):tab.get_meta("button_material").set_shader_parameter("selected",active))
+		tab.custom_minimum_size.y = 42
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tabs.add_child(tab)
+		tab.pressed.connect(func():
+			if caption=="На тропу":
+				overlay.queue_free()
+				resume()
+			else:
+				tab.button_pressed=true
+				var content:=overlay.find_child("JournalRecords",true,false)
+				if content:
+					preload("res://scripts/ui_motion.gd").switch_content(content)
+					for section in content.get_children():section.visible=(str(section.get_meta("journal_section","tasks"))==("photos" if caption=="Фотодневник" else ("species" if caption=="Виды" else "tasks")))
+				var summary:=overlay.find_child("JournalProgress",true,false)
+				if summary:summary.visible=caption=="Задания"
+				var scrollers:=overlay.find_children("*","ScrollContainer",true,false)
+				if not scrollers.is_empty():scrollers[0].scroll_vertical=0)
 	var progress := Label.new()
+	progress.name="JournalProgress"
 	progress.text = "Очистить маршрут · %d / 8 доставлено" % delivered
 	column.add_child(progress)
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	column.add_child(scroll)
 	var records := VBoxContainer.new()
+	records.name="JournalRecords"
 	records.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(records)
+	var mission:=Label.new()
+	mission.text="СОХРАНИ ТРОПУ · НАБЛЮДАЙ ПРИРОДУ"
+	mission.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	mission.add_theme_font_size_override("font_size",17)
+	records.add_child(mission)
+	var tasks:=GridContainer.new()
+	tasks.name="PatrolTasks"
+	tasks.columns=2
+	tasks.add_theme_constant_override("h_separation",40)
+	records.add_child(tasks)
+	var task_states:Array=[
+		["01 / ЧИСТАЯ ТРОПА","Доставьте 8 предметов мусора на базу.","%d / 8 доставлено" % delivered,delivered>=8],
+		["02 / ПОЛЕВОЙ КАДР","Снимите пейзаж фотоаппаратом.\nC · ПКМ · ЛКМ","%s за обход" % photo_count_text(session_photos),session_photos>0],
+		["03 / ПЛАН ОБХОДА","Поставьте метку на карте.\nM · щелчок по карте","%d меток маршрута" % map_waypoints.size(),not map_waypoints.is_empty()]]
+	for task in task_states:
+		var card:=PanelContainer.new()
+		card.custom_minimum_size.x=590
+		var task_style:=StyleBoxFlat.new()
+		task_style.bg_color=Color("ead7ad") if task[3] else Color("d9bd88")
+		task_style.border_color=Color("8b956d") if task[3] else Color("685f43")
+		task_style.set_border_width_all(1)
+		task_style.set_corner_radius_all(10)
+		task_style.set_content_margin_all(26)
+		task_style.shadow_color=Color(0,0,0,.25)
+		task_style.shadow_size=4
+		card.add_theme_stylebox_override("panel",task_style)
+		tasks.add_child(card)
+		var contents:=VBoxContainer.new()
+		contents.add_theme_constant_override("separation",8)
+		card.add_child(contents)
+		card.add_child(preload("res://scripts/ornamental_frame.gd").new())
+		var task_meter:=ProgressBar.new()
+		task_meter.show_percentage=false
+		task_meter.custom_minimum_size.y=6
+		var meter_track:=StyleBoxFlat.new()
+		meter_track.bg_color=Color("182d27")
+		var meter_fill:=StyleBoxFlat.new()
+		meter_fill.bg_color=Color("c3ac70")
+		task_meter.add_theme_stylebox_override("background",meter_track)
+		task_meter.add_theme_stylebox_override("fill",meter_fill)
+		task_meter.value=minf(100,delivered*12.5) if task==task_states[0] else (100 if task[3] else 0)
+		contents.add_child(task_meter)
+		for text in [task[0],task[1],("ВЫПОЛНЕНО · " if task[3] else "В РАБОТЕ · ")+task[2]]:
+			var line:=Label.new()
+			line.text=text
+			line.add_theme_font_size_override("font_size",15)
+			contents.add_child(line)
+	var ethics:=Label.new()
+	ethics.text="С ТРОПЫ · БЕЗ СБОРА РАСТЕНИЙ · МУСОР НА БАЗУ"
+	ethics.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	ethics.add_theme_font_size_override("font_size",15)
+	records.add_child(ethics)
 	var status := Label.new()
+	status.name = "HerbariumHeading"
 	status.text = "Гербарий · %d / %d изучено" % [observed_species.size(),plant_catalog.entries.size()] if not plant_catalog.entries.is_empty() else "Гербарий ожидает подтверждённые материалы к ТЗ."
 	records.add_child(status)
+	if plant_catalog.entries.is_empty():
+		var verified:Variant=JSON.parse_string(FileAccess.get_file_as_string("res://data/verified_plant_names.json"))
+		if verified is Dictionary:
+			var note:=Label.new()
+			note.text="СПРАВОЧНИК ПАРКА · 21 подтверждённое название\nМодели и определительные карточки готовятся; эти записи не считаются изученными видами."
+			note.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+			records.add_child(note)
+			var listing:=GridContainer.new()
+			listing.name="VerifiedPlantNames"
+			listing.columns=2
+			listing.add_theme_constant_override("h_separation",28)
+			listing.add_theme_constant_override("v_separation",10)
+			records.add_child(listing)
+			for names in verified.get("species",[]):
+				var entry_label:=Label.new()
+				entry_label.text=str(names[0])+"\n"+str(names[1])
+				entry_label.custom_minimum_size.x=460
+				entry_label.add_theme_font_size_override("font_size",16)
+				var plant_card:=PanelContainer.new()
+				var paper:=StyleBoxFlat.new()
+				paper.bg_color=Color("d9bd88")
+				paper.border_color=Color("685f43")
+				paper.set_border_width_all(1)
+				paper.set_corner_radius_all(8)
+				paper.set_content_margin_all(12)
+				plant_card.add_theme_stylebox_override("panel",paper)
+				listing.add_child(plant_card)
+				plant_card.add_child(entry_label)
+			var source:=LinkButton.new()
+			source.text="Источник: официальный перечень национального парка"
+			source.uri=str(verified.get("source",""))
+			records.add_child(source)
+	var species_grid:=GridContainer.new()
+	species_grid.name="SpeciesGrid"
+	species_grid.columns=4
+	species_grid.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+	species_grid.add_theme_constant_override("h_separation",64)
+	species_grid.add_theme_constant_override("v_separation",16)
+	records.add_child(species_grid)
 	for entry in plant_catalog.entries:
-		if not observed_species.has(entry.get("id","")):continue
 		var record := Button.new()
-		record.text = str(entry.get("name_ru",entry.get("id","")))
-		record.custom_minimum_size.y = 54
-		records.add_child(record)
+		record.custom_minimum_size=Vector2(256,200)
+		record.tooltip_text=str(entry.name_latin)
+		species_grid.add_child(record)
+		var art:=TextureRect.new()
+		art.texture=load(str(entry.photo))
+		art.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		art.position=Vector2(8,8);art.size=Vector2(240,135)
+		art.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		record.add_child(art)
+		var label:=Label.new()
+		label.text=str(entry.name_ru)+("\n● НАБЛЮДАЛ" if observed_species.has(entry.id) else "\n○ НЕ ОТМЕЧЕН")
+		label.position=Vector2(12,145);label.size=Vector2(232,50)
+		label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size",13)
+		label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		record.add_child(label)
 		record.pressed.connect(func():
 			overlay.queue_free()
 			overlay = preload("res://scripts/plant_card.gd").make_panel(ui,entry,journal_menu))
+	var photo_heading := Label.new()
+	photo_heading.name = "PhotoHeading"
+	photo_heading.text = "ФОТОДНЕВНИК · КАДРЫ %02d" % photo_records.size()
+	photo_heading.add_theme_font_size_override("font_size",22)
+	records.add_child(photo_heading)
+	var gallery := GridContainer.new()
+	gallery.name = "PhotoGallery"
+	gallery.columns = 2
+	gallery.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+	gallery.add_theme_constant_override("h_separation",72)
+	gallery.add_theme_constant_override("v_separation",16)
+	records.add_child(gallery)
+	for photo in photo_records:
+		var card := VBoxContainer.new()
+		card.custom_minimum_size.x=568
+		var frame:=PanelContainer.new()
+		var border:=StyleBoxFlat.new()
+		border.bg_color=Color("e5cca0")
+		border.border_color=Color("a89160")
+		border.set_border_width_all(1)
+		border.set_corner_radius_all(12)
+		border.set_content_margin_all(10)
+		frame.add_theme_stylebox_override("panel",border)
+		gallery.add_child(card)
+		card.add_child(frame)
+		var image := Image.new()
+		if image.load(str(photo.path))!=OK:continue
+		# Keep only thumbnail-size textures in the gallery, not full-resolution photos.
+		if image.get_width()>600:
+			var height:=maxi(1,int(image.get_height()*600.0/image.get_width()))
+			image.resize(600,height,Image.INTERPOLATE_LANCZOS)
+		var preview := TextureRect.new()
+		preview.mouse_filter=Control.MOUSE_FILTER_STOP
+		preview.gui_input.connect(func(event:InputEvent):
+			if event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT:
+				var viewer:=preload("res://scripts/photo_lightbox.gd").new()
+				viewer.photo_path=str(photo.path)
+				viewer.caption=str(plant_catalog.find_species(str(photo.species)).get("name_ru","Полевой кадр"))
+				var viewer_layer:=Node2D.new()
+				overlay.add_child(viewer_layer)
+				viewer_layer.add_child(viewer)
+				viewer.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+				viewer.size=Vector2(1280,720)
+				viewer.tree_exited.connect(viewer_layer.queue_free))
+		preview.texture = ImageTexture.create_from_image(image)
+		preview.custom_minimum_size = Vector2(548,308)
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		frame.add_child(preview)
+		frame.add_child(preload("res://scripts/ornamental_frame.gd").new())
+		var caption := Label.new()
+		var species: Dictionary = plant_catalog.find_species(str(photo.species))
+		caption.text = str(species.get("name_ru","Пейзаж · вид не определён"))
+		caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caption.custom_minimum_size.x = 548
+		card.add_child(caption)
+		var stamp:=Label.new()
+		stamp.text="КАДР %02d · %s" % [photo_records.find(photo)+1,str(photo.get("taken","ПОЛЕВАЯ ЗАПИСЬ"))]
+		stamp.add_theme_font_size_override("font_size",11)
+		stamp.add_theme_color_override("font_color",Color("59432b"))
+		card.add_child(stamp)
+	var instructions := Label.new()
+	instructions.text = "ЩЕЛЧОК ПО СНИМКУ · ОТКРЫТЬ ОРИГИНАЛ"
+	instructions.add_theme_font_size_override("font_size",12)
+	instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	records.add_child(instructions)
+	var photo_section_started:=false
+	var species_section_started:=false
+	for section in records.get_children():
+		if section.name=="HerbariumHeading":species_section_started=true
+		if section.name=="PhotoHeading":photo_section_started=true
+		section.set_meta("journal_section","photos" if photo_section_started else ("species" if species_section_started else "tasks"))
+		section.visible=not (photo_section_started or species_section_started)
 	var back := Button.new()
 	back.text = "К навыкам"
 	back.custom_minimum_size.y = 50
@@ -1251,7 +1771,7 @@ func pause_menu(journal: bool) -> void:
 	overlay.position = Vector2.ZERO
 	overlay.custom_minimum_size = Vector2(1280,720)
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color("302c23")
+	panel_style.bg_color = Color("d7bf91")
 	panel_style.set_corner_radius_all(16)
 	panel_style.set_content_margin_all(24)
 	panel_style.set_border_width_all(1)

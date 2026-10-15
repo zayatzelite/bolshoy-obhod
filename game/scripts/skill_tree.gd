@@ -47,6 +47,9 @@ func refresh() -> void:
 		button.text = "%s · %s\n%s" % ["✓" if owned else str(rank),status,effect]
 		button.tooltip_text = effect+"\n"+status
 		button.disabled = owned or not world.at_upgrade_station() or world.progression.points()<1 or world.progression.ranks[key]!=rank-1
+		if button.has_meta("button_material"):
+			var material:ShaderMaterial=button.get_meta("button_material")
+			material.set_shader_parameter("selected",owned)
 		if owned:button.add_theme_color_override("font_disabled_color",Color("30271c"))
 		else:button.remove_theme_color_override("font_disabled_color")
 	queue_redraw()

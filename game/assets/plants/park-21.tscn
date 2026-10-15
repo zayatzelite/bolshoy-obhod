@@ -1,0 +1,127 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="leafmat"]
+albedo_color = Color(0.17, 0.36, 0.13, 1)
+roughness = 0.85
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="flowermat"]
+albedo_color = Color(0.3, 0.49, 0.22, 1)
+roughness = 0.7
+
+[sub_resource type="CylinderMesh" id="stem"]
+top_radius = 0.003
+bottom_radius = 0.005
+height = 0.23
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="leaf"]
+radius = 0.025
+height = 0.05
+radial_segments = 10
+rings = 5
+
+[sub_resource type="SphereMesh" id="petal"]
+radius = 0.025
+height = 0.05
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereMesh" id="center"]
+radius = 0.014
+height = 0.028
+radial_segments = 10
+rings = 5
+
+[node name="Plant" type="Node3D"]
+
+[node name="Stem" type="MeshInstance3D" parent="."]
+position = Vector3(0,0.115,0)
+scale = Vector3(1,1,1)
+rotation = Vector3(0,0,0)
+mesh = SubResource("stem")
+material_override = SubResource("leafmat")
+
+[node name="Leaf0" type="MeshInstance3D" parent="."]
+position = Vector3(0.03,0.0345,0.0)
+scale = Vector3(1.1,0.16,4)
+rotation = Vector3(0,-0.0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.022121811466237363,0.059800000000000006,0.02026389541653453)
+scale = Vector3(1.1,0.16,4)
+rotation = Vector3(0,-2.4,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf2" type="MeshInstance3D" parent="."]
+position = Vector3(0.0026249695031833917,0.08510000000000001,-0.02988493826507522)
+scale = Vector3(1.1,0.16,4)
+rotation = Vector3(0,-4.8,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf3" type="MeshInstance3D" parent="."]
+position = Vector3(0.018250539435967657,0.1104,0.02381003591547458)
+scale = Vector3(1.1,0.16,4)
+rotation = Vector3(0,-7.199999999999999,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf4" type="MeshInstance3D" parent="."]
+position = Vector3(-0.02954063567382381,0.1357,-0.005229803436689389)
+scale = Vector3(1.1,0.16,4)
+rotation = Vector3(0,-9.6,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="FlowerHeart0" type="MeshInstance3D" parent="."]
+position = Vector3(0,0.23600000000000002,0)
+scale = Vector3(0.7,0.6,0.7)
+rotation = Vector3(0,0,0)
+mesh = SubResource("center")
+material_override = SubResource("flowermat")
+
+[node name="Joint0" type="MeshInstance3D" parent="."]
+position = Vector3(0.0,0.0345,0.02)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Joint1" type="MeshInstance3D" parent="."]
+position = Vector3(0.021036774620197415,0.0605,0.010806046117362796)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Joint2" type="MeshInstance3D" parent="."]
+position = Vector3(0.022732435670642044,0.0865,-0.008322936730942847)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Joint3" type="MeshInstance3D" parent="."]
+position = Vector3(0.0035280002014966803,0.1125,-0.01979984993200891)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Joint4" type="MeshInstance3D" parent="."]
+position = Vector3(-0.018920062382698208,0.1385,-0.013072872417272239)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Joint5" type="MeshInstance3D" parent="."]
+position = Vector3(-0.023973106866578463,0.1645,0.005673243709264525)
+scale = Vector3(0.2,2,0.2)
+rotation = Vector3(0,0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")

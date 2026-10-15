@@ -13,11 +13,14 @@ func setup() -> void:
 func _process(_delta: float) -> bool:
 	if not is_instance_valid(scene):return false
 	ticks+=1
-	if ticks==3:
+	if ticks>=3 and scene.overlay.modulate.a>=.999:
 		var rect: Rect2 = scene.overlay.get_global_rect()
 		assert(rect==Rect2(0,0,1280,720))
-		assert(scene.overlay.get_child(0).get_child(3).get_global_rect().end.y<=720)
-		var text: String = scene.overlay.get_child(0).get_child(1).text
+		var text:=""
+		for label:Label in scene.overlay.find_children("*","Label",true,false):text+=label.text+"\n"
+		var buttons:Array=scene.overlay.find_children("*","Button",true,false)
+		assert(buttons.size()==1)
+		assert(buttons[0].get_global_rect().end.y<=720)
 		assert(text.contains("2 мин 05 с") and text.contains("185 м") and text.contains("200"))
 		root.get_texture().get_image().save_png("res://../patrol_results_preview.png")
 		print("RESULTS PASS: bounded panel, time, distance and session XP")

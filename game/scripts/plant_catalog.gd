@@ -20,8 +20,9 @@ func validate(data: Variant, check_resources: bool = true) -> bool:
 		errors.append("Ожидается объект с массивом species.")
 		return false
 	var species: Array = data.species
-	if species.size()!=EXPECTED_SPECIES:
-		errors.append("Требуется 22 вида; получено %d." % species.size())
+	var expected:int=21 if data.get("catalog_mode","")=="verified_demo_21" else EXPECTED_SPECIES
+	if species.size()!=expected:
+		errors.append("Требуется %d видов; получено %d." % [expected,species.size()])
 	var ids := {}
 	for index in range(species.size()):
 		var record = species[index]

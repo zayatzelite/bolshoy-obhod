@@ -13,6 +13,7 @@ func _process(_delta: float) -> bool:
 	ticks+=1
 	if ticks==8:
 		for label in [scene.prompt,scene.message]:
+			if not label.get_parent().get_parent().visible:continue
 			var rect: Rect2 = label.get_parent().get_parent().get_global_rect()
 			print("HUD RECT: ",rect)
 			if rect.position.x<0 or rect.position.y<0 or rect.end.x>1280 or rect.end.y>720:

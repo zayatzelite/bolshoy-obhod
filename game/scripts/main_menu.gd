@@ -36,8 +36,11 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	margin.add_child(column)
-	var start := button(column, "Играть   →", show_start, true)
+	var start := button(column, "Продолжить   →", show_start, true)
+	start.disabled=not FileAccess.file_exists("user://progress.cfg")
+	start.get_meta("button_material").set_shader_parameter("disabled",start.disabled)
 	menu_buttons.append(start)
+	menu_buttons.append(button(column,"Новая игра",show_new_game))
 	var patrol := button(column, "Патрули", show_patrol)
 	menu_buttons.append(patrol)
 	menu_buttons.append(button(column, "Настройки", show_settings))
@@ -57,7 +60,13 @@ func _ready() -> void:
 	modal_body.add_theme_constant_override("separation", 14)
 	mm.add_child(modal_body)
 	modal.hide()
-	start.grab_focus()
+	focus_menu()
+
+func focus_menu() -> void:
+	for item in menu_buttons:
+		if not item.disabled and item.is_visible_in_tree():
+			item.grab_focus()
+			return
 
 func box(color: Color, radius: int, border: Color = Color.TRANSPARENT) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -87,23 +96,30 @@ func button(parent: Node, text: String, action: Callable, primary: bool = false)
 	item.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	item.add_theme_font_size_override("font_size", 21)
 	var clear := StyleBoxEmpty.new()
-	for state in ["normal", "hover", "pressed"]:
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		item.add_theme_stylebox_override(state, clear)
 	var bg := ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.show_behind_parent = true
 	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/menu_button.gdshader")
-	mat.set_shader_parameter("top_color", Color("f5d799") if primary else Color("d7bf91"))
-	mat.set_shader_parameter("bottom_color", Color("b9894c") if primary else Color("9f825e"))
+	mat.shader = preload("res://shaders/panel_button.gdshader")
+	mat.set_shader_parameter("selected",primary)
+	mat.set_shader_parameter("disabled",item.disabled)
+	item.set_meta("button_material",mat)
+	item.draw.connect(func():
+		if mat.get_shader_parameter("disabled")!=item.disabled:
+			mat.set_shader_parameter("disabled",item.disabled))
+	mat.set_shader_parameter("panel_size",item.size)
+	item.resized.connect(func():mat.set_shader_parameter("panel_size",item.size))
 	bg.material = mat
 	item.add_child(bg)
-	item.mouse_entered.connect(func() -> void: mat.set_shader_parameter("hover", 1.0))
-	item.mouse_exited.connect(func() -> void: mat.set_shader_parameter("hover", 0.0))
+	item.mouse_entered.connect(func() -> void: preload("res://scripts/ui_motion.gd").hover(item,mat,0.0 if item.disabled else 1.0))
+	item.mouse_exited.connect(func() -> void: preload("res://scripts/ui_motion.gd").hover(item,mat,0.0))
 	item.add_theme_stylebox_override("focus", box(Color.TRANSPARENT, 12, Color("ffe1a0")))
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 		item.add_theme_color_override(state, Color("30271c"))
+	item.add_theme_color_override("font_disabled_color",Color("51432f"))
 	item.add_theme_color_override("font_shadow_color", Color(1, 0.91, 0.72, 0.5))
 	item.add_theme_constant_override("shadow_offset_y", 1)
 	item.pressed.connect(action)
@@ -115,7 +131,9 @@ func open_modal(title: String) -> void:
 		modal_body.remove_child(child)
 		child.queue_free()
 	modal.show()
-	label(modal_body, title, 28, Color("214e44"))
+	modal.modulate.a=0
+	modal.create_tween().tween_property(modal,"modulate:a",1.0,.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	label(modal_body, title, 28, Color("30271c"))
 
 func close_button() -> void:
 	var spacer := Control.new()
@@ -126,15 +144,24 @@ func close_button() -> void:
 
 func close_modal() -> void:
 	modal.hide()
-	menu_buttons[0].grab_focus()
+	focus_menu()
 
 func paragraph(text: String) -> void:
-	var item := label(modal_body, text, 18, Color("355b50"))
+	var item := label(modal_body, text, 18, Color("59432b"))
 	item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	item.custom_minimum_size.x = 540
 
+func show_new_game() -> void:
+	open_modal("Начать новый обход?")
+	paragraph("Опыт, навыки, записи и метки будут сброшены. Перед началом создаётся резервная копия; оригиналы фотографий остаются на диске.")
+	button(modal_body,"Начать заново",func():
+		var result:=preload("res://scripts/save_reset.gd").begin_new_game()
+		if result.error==OK:show_start()
+		else:paragraph("Сброс не выполнен: ошибка %d. Резервная копия: %s" % [result.error,result.backup]),true)
+	close_button()
+
 func show_start() -> void:
-	get_tree().change_scene_to_file("res://scenes/world.tscn")
+	get_tree().change_scene_to_file("res://scenes/loading.tscn")
 
 func show_patrol() -> void:
 	open_modal("Новые обходы — новые истории")
@@ -157,7 +184,7 @@ func show_quit() -> void:
 
 func show_settings() -> void:
 	modal.hide()
-	preload("res://scripts/game_settings.gd").make_panel(self, func() -> void: menu_buttons[0].grab_focus())
+	preload("res://scripts/game_settings.gd").make_panel(self, focus_menu)
 
 func persist() -> void:
 	var result := config.save(SAVE_PATH)

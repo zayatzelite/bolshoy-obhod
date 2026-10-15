@@ -1,0 +1,218 @@
+[gd_scene load_steps=7 format=3]
+
+[sub_resource type="StandardMaterial3D" id="leafmat"]
+albedo_color = Color(0.17, 0.36, 0.13, 1)
+roughness = 0.85
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="flowermat"]
+albedo_color = Color(0.3, 0.49, 0.22, 1)
+roughness = 0.7
+
+[sub_resource type="CylinderMesh" id="stem"]
+top_radius = 0.003
+bottom_radius = 0.005
+height = 0.2
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="leaf"]
+radius = 0.025
+height = 0.05
+radial_segments = 10
+rings = 5
+
+[sub_resource type="SphereMesh" id="petal"]
+radius = 0.025
+height = 0.05
+radial_segments = 12
+rings = 6
+
+[sub_resource type="SphereMesh" id="center"]
+radius = 0.014
+height = 0.028
+radial_segments = 10
+rings = 5
+
+[node name="Plant" type="Node3D"]
+
+[node name="Stem" type="MeshInstance3D" parent="."]
+position = Vector3(0,0.1,0)
+scale = Vector3(1,1,1)
+rotation = Vector3(0,0,0)
+mesh = SubResource("stem")
+material_override = SubResource("leafmat")
+
+[node name="Leaf0" type="MeshInstance3D" parent="."]
+position = Vector3(0.03,0.03,0.0)
+scale = Vector3(1.1,0.16,2.2)
+rotation = Vector3(0,-0.0,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.022121811466237363,0.052000000000000005,0.02026389541653453)
+scale = Vector3(1.1,0.16,2.2)
+rotation = Vector3(0,-2.4,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf2" type="MeshInstance3D" parent="."]
+position = Vector3(0.0026249695031833917,0.074,-0.02988493826507522)
+scale = Vector3(1.1,0.16,2.2)
+rotation = Vector3(0,-4.8,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf3" type="MeshInstance3D" parent="."]
+position = Vector3(0.018250539435967657,0.096,0.02381003591547458)
+scale = Vector3(1.1,0.16,2.2)
+rotation = Vector3(0,-7.199999999999999,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Leaf4" type="MeshInstance3D" parent="."]
+position = Vector3(-0.02954063567382381,0.118,-0.005229803436689389)
+scale = Vector3(1.1,0.16,2.2)
+rotation = Vector3(0,-9.6,0)
+mesh = SubResource("leaf")
+material_override = SubResource("leafmat")
+
+[node name="Petal0_0" type="MeshInstance3D" parent="."]
+position = Vector3(0.0175,0.2,0.0)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal0_1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.017499999999999998,0.2,0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,0.0,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal0_2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.052500000000000005,0.2,4.286263797015737e-18)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal0_3" type="MeshInstance3D" parent="."]
+position = Vector3(-0.01750000000000001,0.2,-0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-3.141592653589793,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="FlowerHeart0" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0175,0.20600000000000002,0)
+scale = Vector3(0.7,0.6,0.7)
+rotation = Vector3(0,0,0)
+mesh = SubResource("center")
+material_override = SubResource("flowermat")
+
+[node name="Petal1_0" type="MeshInstance3D" parent="."]
+position = Vector3(0.052500000000000005,0.162,0.0)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal1_1" type="MeshInstance3D" parent="."]
+position = Vector3(0.017500000000000005,0.162,0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,0.0,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal1_2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0175,0.162,4.286263797015737e-18)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal1_3" type="MeshInstance3D" parent="."]
+position = Vector3(0.017499999999999995,0.162,-0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-3.141592653589793,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="FlowerHeart1" type="MeshInstance3D" parent="."]
+position = Vector3(0.0175,0.168,0)
+scale = Vector3(0.7,0.6,0.7)
+rotation = Vector3(0,0,0)
+mesh = SubResource("center")
+material_override = SubResource("flowermat")
+
+[node name="Petal2_0" type="MeshInstance3D" parent="."]
+position = Vector3(0.0175,0.12400000000000001,0.0)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal2_1" type="MeshInstance3D" parent="."]
+position = Vector3(-0.017499999999999998,0.12400000000000001,0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,0.0,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal2_2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.052500000000000005,0.12400000000000001,4.286263797015737e-18)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal2_3" type="MeshInstance3D" parent="."]
+position = Vector3(-0.01750000000000001,0.12400000000000001,-0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-3.141592653589793,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="FlowerHeart2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0175,0.13,0)
+scale = Vector3(0.7,0.6,0.7)
+rotation = Vector3(0,0,0)
+mesh = SubResource("center")
+material_override = SubResource("flowermat")
+
+[node name="Petal3_0" type="MeshInstance3D" parent="."]
+position = Vector3(0.052500000000000005,0.08600000000000002,0.0)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal3_1" type="MeshInstance3D" parent="."]
+position = Vector3(0.017500000000000005,0.08600000000000002,0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,0.0,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal3_2" type="MeshInstance3D" parent="."]
+position = Vector3(-0.0175,0.08600000000000002,4.286263797015737e-18)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-1.5707963267948966,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="Petal3_3" type="MeshInstance3D" parent="."]
+position = Vector3(0.017499999999999995,0.08600000000000002,-0.035)
+scale = Vector3(0.65,0.25,1.35)
+rotation = Vector3(0,-3.141592653589793,0)
+mesh = SubResource("petal")
+material_override = SubResource("flowermat")
+
+[node name="FlowerHeart3" type="MeshInstance3D" parent="."]
+position = Vector3(0.0175,0.09200000000000003,0)
+scale = Vector3(0.7,0.6,0.7)
+rotation = Vector3(0,0,0)
+mesh = SubResource("center")
+material_override = SubResource("flowermat")

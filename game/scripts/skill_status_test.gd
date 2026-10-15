@@ -30,6 +30,8 @@ func run() -> void:
 	assert(scene.progression.ranks.stamina==1)
 	assert(tree.nodes[0].text.contains("ИЗУЧЕНО") and tree.nodes[0].disabled)
 	assert(tree.nodes[0].get_theme_color("font_disabled_color")==Color("30271c"))
+	assert(tree.nodes[0].get_meta("button_material").get_shader_parameter("selected"))
+	assert(not tree.nodes[1].get_meta("button_material").get_shader_parameter("selected"))
 	assert(not tree.nodes[1].disabled)
 	assert(scene.progression.saves==1)
 	print("SKILL STATUS PASS: zero points, prerequisite, away/base, purchase and learned contrast; saves in memory only")

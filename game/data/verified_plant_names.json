@@ -1,0 +1,27 @@
+{
+  "source": "https://lena-pillars.ru/keep/red-book/plants/",
+  "status": "Неполный официальный перечень: 21 сосудистый вид. Расхождение с сообщением о 22 видах не разрешено. Названия переданы по источнику; категории охраны отдельно не проверены.",
+  "species": [
+    ["Редовския двоякоперистая", "Redowskia sophiifolia"],
+    ["Адонис сибирский", "Adonis sibirica"],
+    ["Башмачок крупноцветковый", "Cypripedium macranthon"],
+    ["Башмачок настоящий", "Cypripedium calceolus"],
+    ["Башмачок пятнистый", "Cypripedium guttatum"],
+    ["Вздутоплодник сибирский", "Phlojodicarpus sibiricus"],
+    ["Живокость крупноцветковая", "Delphinium grandiflorum"],
+    ["Гнездовка камчатская", "Neottia camtschatea"],
+    ["Истод сибирский", "Polygala sibirica"],
+    ["Калипсо луковичная", "Calypso bulbosa"],
+    ["Касатик сглаженный", "Iris laevigata"],
+    ["Кубышка малая", "Nuphar pumila"],
+    ["Кувшинка четырехгранная", "Nymphaea tetragona Georgi"],
+    ["Лилия пенсильванская", "Lilium pensylvanicum"],
+    ["Лук ветвистый", "Allium ramosum"],
+    ["Лук стелющийся", "Allium prostratum"],
+    ["Любка малоцветковая", "Platanthera oligantha"],
+    ["Мак якутский", "Papaver jacuticum Peschkova"],
+    ["Пальчатокоренник Фукса", "Dactylorhiza fuchsii"],
+    ["Постенница слабая", "Parietaria debilis Forst."],
+    ["Хвойник односемянный", "Ephedra monosperma"]
+  ]
+}
